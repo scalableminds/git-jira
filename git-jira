@@ -1,0 +1,162 @@
+#!/bin/bash -e
+
+# git required variables
+USAGE='<start|promote> <issue-id>
+
+Commands:
+    start     Creates a new branch with the specified JIRA <issue-id>,
+              associates it with the issue in JIRA, and sets the status to
+              "In Progress".
+    promote   Takes the specified branch <issue-id>, sets status to "Testing",
+              and merges your issue branch back to the development branch.
+'
+LONG_USAGE='git-jira lets you create a new branch based on a JIRA issue and
+mark the issue as in progress. Additionally, when you have completed the
+issue, you can push the changes back to JIRA with links to your code commits.'
+
+# Sets GIT_DIR and GIT_OBJECT_DIRECTORY, and provides functions below
+. git-sh-setup
+
+# Setup
+GIT_KEY_JIRA_CLI="jira.cli"
+GIT_KEY_JIRA_SERVER="jira.server"
+GIT_KEY_JIRA_USER="jira.user"
+GIT_KEY_JIRA_PASSWORD="jira.password"
+
+# JIRA credentials
+JIRA_SERVER=$(git config $GIT_KEY_JIRA_SERVER || true)
+JIRA_USER=$(git config $GIT_KEY_JIRA_USER || true)
+JIRA_PASSWORD=$(git config $GIT_KEY_JIRA_PASSWORD || true)
+
+JIRA_CLI=$(git config $GIT_KEY_JIRA_CLI || true)
+CACHE_FILE=$GIT_DIR/jira.cache
+
+GIT_USER=$(git config user.name || echo $USER)
+
+while [ -z "$JIRA_CLI" -o \
+	-z "$JIRA_SERVER" -o \
+	-z "$JIRA_USER" -o \
+	-z "$JIRA_PASSWORD" ]; do
+
+	printf "We need to set some configuration values in order to correctly\n"
+	printf "interface with JIRA. Entered values will be stored in your\n"
+	printf "$HOME/.gitconfig file.\n"
+
+	if [ -z "$JIRA_CLI" ]; then
+		printf "\nThe JIRA CLI JAR file should be installed somewhere in your home\n"
+		printf "directory or globally. Please provide the full path to the CLI script, e.g.\n"
+		printf "$HOME/bin/jira-cli/jira.sh\n\n"
+
+		read -e -p "JIRA CLI script path: " ans
+
+		if [ -z $ans ]; then
+			printf "You did not specify a path. Would you like to download and install\n"
+			printf "a working configuration into $HOME/bin?\n\n"
+
+			read -e -p "Install working configuration [yes]: " ans2
+			ans2=$(echo $ans2 | tr [a-z] [A-Z])
+
+			if [ $ans2 == "YES" -o \
+				$ans2 == "Y" -o \
+				-z $ans2 ]; then
+				LINK="https://bobswift.atlassian.net/wiki/download/attachments/16285777/jira-cli-3.1.0-distribution.zip?api=v2"
+
+				# TODO: Add ability to automatically download a working CLI from Atlassian
+			fi
+		fi
+
+		JIRA_CLI="$ans"
+		git config $GIT_KEY_JIRA_CLI "$JIRA_CLI"
+	fi
+
+	if [ -z "$JIRA_SERVER" ]; then
+		printf "\nPlease specify your JIRA server, including full protocol\n"
+		printf "(e.g., https://yourondemandserver.jira.com).\n\n"
+
+		read -e -p "JIRA server: " ans
+
+		JIRA_SERVER="$ans"
+		git config $GIT_KEY_JIRA_SERVER $JIRA_SERVER
+	fi
+
+	if [ -z "$JIRA_USER" ]; then
+		printf "\nPlease specify your JIRA username. Note that this will not work\n"
+		printf "with accounts authenticated by a 3rd-party, such as Google. You\n"
+		printf "MUST have a full-fledged OnDemand account.\n\n"
+
+		read -e -p "JIRA username: " ans
+
+		JIRA_USER=$ans
+		git config $GIT_KEY_JIRA_USER $JIRA_USER
+	fi
+
+	if [ -z "$JIRA_PASSWORD" ]; then
+		old_tty=$(stty -g)
+		stty -echo
+		printf "\n"
+		read -e -p "JIRA password: " ans
+		stty $old_tty
+
+		JIRA_PASSWORD=$ans
+		git config $GIT_KEY_JIRA_PASSWORD $JIRA_PASSWORD
+	fi
+done
+
+JIRA_CMD="$JIRA_CLI --server $JIRA_SERVER --user $JIRA_USER --password $JIRA_PASSWORD"
+
+function get_cached_issue () {
+	local ISSUE=$1
+	test -f $CACHE_FILE || return 0
+	local LINE=`grep ^$ISSUE: $CACHE_FILE`
+	test -n "$LINE" || return 0
+	ISSUE_SUMMARY=$(echo $LINE | sed -e "s/^$ISSUE: //")
+}
+
+function fail () {
+	echo $@
+	exit 1
+}
+
+##### Do our thing #####
+require_work_tree
+
+ACTION=$1
+test -n "$ACTION" || usage
+
+test -n "$GIT_DIR" || fail "Missing GIT_DIR variable"
+
+BRANCH_NAME=$2
+
+case "$ACTION" in
+	start)
+		test -n "$BRANCH_NAME" || usage
+		[[ $BRANCH_NAME =~ ^[A-Z]+-[0-9]+$ ]] || fail "Branch $BRANCH_NAME does not appear to be a JIRA issue; ensure you specify an all-caps identifier"
+
+		echo "- Checking JIRA status..."
+		ISSUE_STARTED=$($JIRA_CMD --action getAvailableSteps --issue $BRANCH_NAME | grep \"Start\" | wc -l | awk {'print $1'})
+
+		if [[ $ISSUE_STARTED -ne 0 ]]; then
+			echo "- Updating JIRA status..."
+			$JIRA_CMD --action progressIssue --issue $BRANCH_NAME --step "Start"
+		fi
+
+		# Cache the JIRA issue title for later cheaper commits
+		get_cached_issue $BRANCH_NAME
+		if [ -z "$ISSUE_SUMMARY" ]; then
+			ISSUE_SUMMARY=$($JIRA_CMD --action getFieldValue --issue $BRANCH_NAME --field Summary | sed -e '1d')
+			echo "$BRANCH_NAME: $ISSUE_SUMMARY" >> $CACHE_FILE
+		fi
+
+		if [ -z "$(git branch | grep $BRANCH_NAME)" ]; then
+			git checkout -b $BRANCH_NAME
+			printf "JIRA updated and new branch $BRANCH_NAME created. When you are finished with\n"
+			printf "this branch, run:\n\n\tgit ${0##*-} promote $2\n\n"
+		else
+			git checkout $BRANCH_NAME
+			printf "To update this issue's JIRA workflow status when you're ready to merge back\n"
+			printf "into your parent branch, run:\n\n\tgit ${0##*-} promote $2\n\n"
+		fi
+	;;
+
+	*) echo "$USAGE" ;;
+esac
