@@ -5,8 +5,8 @@ USAGE='<start|promote> <issue-id>
 
 Commands:
     start     Creates a new branch with the specified JIRA <issue-id>,
-              associates it with the issue in JIRA, and sets the status to
-              "In Progress".
+              associates it with the issue in JIRA, assigns it to you, and
+              sets the status to "In Progress".
     promote   Takes the specified branch <issue-id>, sets status to "Testing",
               and merges your issue branch back to the development branch.
 '
@@ -22,6 +22,8 @@ GIT_KEY_JIRA_CLI="jira.cli"
 GIT_KEY_JIRA_SERVER="jira.server"
 GIT_KEY_JIRA_USER="jira.user"
 GIT_KEY_JIRA_PASSWORD="jira.password"
+GIT_KEY_TARGET_MERGE_BRANCH="jira.targetmergebranch"
+GIT_KEY_BEANSTALK_REPOSITORY="jira.beanstalkrepository"
 
 # JIRA credentials
 JIRA_SERVER=$(git config $GIT_KEY_JIRA_SERVER || true)
@@ -32,11 +34,16 @@ JIRA_CLI=$(git config $GIT_KEY_JIRA_CLI || true)
 CACHE_FILE=$GIT_DIR/jira.cache
 
 GIT_USER=$(git config user.name || echo $USER)
+TARGET_MERGE_BRANCH=$(git config $GIT_KEY_TARGET_MERGE_BRANCH || true)
+
+BEANSTALK_REPOSITORY=$(git config $GIT_KEY_BEANSTALK_REPOSITORY || true)
 
 while [ -z "$JIRA_CLI" -o \
 	-z "$JIRA_SERVER" -o \
 	-z "$JIRA_USER" -o \
-	-z "$JIRA_PASSWORD" ]; do
+	-z "$JIRA_PASSWORD" -o \
+	-z "$BEANSTALK_REPOSITORY" -o \
+	-z "$TARGET_MERGE_BRANCH" ]; do
 
 	printf "We need to set some configuration values in order to correctly\n"
 	printf "interface with JIRA. Entered values will be stored in your\n"
@@ -100,6 +107,32 @@ while [ -z "$JIRA_CLI" -o \
 		JIRA_PASSWORD=$ans
 		git config $GIT_KEY_JIRA_PASSWORD $JIRA_PASSWORD
 	fi
+
+	if [ -z "$BEANSTALK_REPOSITORY" ]; then
+		printf "\nPlease specify the name of your Beanstalk repository that houses\n"
+		printf "the codebase for the associated JIRA project and issues.\n"
+		printf "Do not enter the full URL.\n\n"
+
+		read -e -p "Beanstalk repository key: " ans
+
+		BEANSTALK_REPOSITORY=$ans
+		git config $GIT_KEY_BEANSTALK_REPOSITORY $BEANSTALK_REPOSITORY
+	fi
+
+	if [ -z "$TARGET_MERGE_BRANCH" ]; then
+		printf "\nPlease specify the branch you'd like to merge your issue branches\n"
+		printf "back into when finished. This is typically set to \"master\" unless\n"
+		printf "you have another specific development branch you wish to work with.\n\n"
+
+		read -e -p "Destination merge branch [master]: " ans
+
+		if [ -z $ans ]; then
+			ans=master
+		fi
+
+		TARGET_MERGE_BRANCH=$ans
+		git config $GIT_KEY_TARGET_MERGE_BRANCH $TARGET_MERGE_BRANCH
+	fi
 done
 
 JIRA_CMD="$JIRA_CLI --server $JIRA_SERVER --user $JIRA_USER --password $JIRA_PASSWORD"
@@ -112,6 +145,11 @@ function get_cached_issue () {
 	ISSUE_SUMMARY=$(echo $LINE | sed -e "s/^$ISSUE: //")
 }
 
+function is_jira_issue () {
+	local ISSUE=$1
+	[[ $ISSUE =~ ^([A-Z]+-[0-9]+)$ ]] || fail "Branch $ISSUE does not appear to be a JIRA issue; ensure you specify an all-caps identifier"
+}
+
 function fail () {
 	echo $@
 	exit 1
@@ -119,24 +157,24 @@ function fail () {
 
 ##### Do our thing #####
 require_work_tree
+test -n "$GIT_DIR" || fail "Missing GIT_DIR variable"
 
 ACTION=$1
 test -n "$ACTION" || usage
-
-test -n "$GIT_DIR" || fail "Missing GIT_DIR variable"
 
 BRANCH_NAME=$2
 
 case "$ACTION" in
 	start)
 		test -n "$BRANCH_NAME" || usage
-		[[ $BRANCH_NAME =~ ^[A-Z]+-[0-9]+$ ]] || fail "Branch $BRANCH_NAME does not appear to be a JIRA issue; ensure you specify an all-caps identifier"
+		is_jira_issue "$BRANCH_NAME"
 
-		echo "- Checking JIRA status..."
+		echo "Checking JIRA status..."
 		ISSUE_STARTED=$($JIRA_CMD --action getAvailableSteps --issue $BRANCH_NAME | grep \"Start\" | wc -l | awk {'print $1'})
 
 		if [[ $ISSUE_STARTED -ne 0 ]]; then
-			echo "- Updating JIRA status..."
+			echo "Updating JIRA status..."
+			$JIRA_CMD --action updateIssue --issue $BRANCH_NAME -assignee $JIRA_USER
 			$JIRA_CMD --action progressIssue --issue $BRANCH_NAME --step "Start"
 		fi
 
@@ -156,6 +194,47 @@ case "$ACTION" in
 			printf "To update this issue's JIRA workflow status when you're ready to merge back\n"
 			printf "into your parent branch, run:\n\n\tgit ${0##*-} promote $2\n\n"
 		fi
+	;;
+
+	promote)
+		test -n "$BRANCH_NAME" || BRANCH_NAME=$(git symbolic-ref HEAD | sed -e 's/refs\/heads\///')
+		test -n "$BRANCH_NAME" || fail "Unable to get branch name from current branch and no argument specified"
+		is_jira_issue "$BRANCH_NAME"
+
+		# EOT is CTRL-V, CTRL-D
+# 		read -d '' -p "Enter any additional comments you would like appended to your JIRA issue.
+# Press CTRL-D to finish, or CTRL-C to abort:
+# " NOTES
+		NOTES_FILE=/tmp/JIRA_NOTES_MSG_$RANDOM
+
+		${EDITOR:-vi} "$NOTES_FILE"
+		NOTES=$(cat "$NOTES_FILE")
+		rm "$NOTES_FILE"
+
+		printf "\n\nMerging branch $BRANCH_NAME into $TARGET_MERGE_BRANCH..."
+
+		COMMITS=$(git log $TARGET_MERGE_BRANCH... --oneline --no-abbrev-commit | sed \
+			-e "s/\([0-9a-f]*\) \(.*\)/* \[\2|http:\/\/hidef.beanstalkapp.com\/$BEANSTALK_REPOSITORY\/changesets\/\1\]/" \
+			-e "s/\[$BRANCH_NAME\] //")
+		COMMIT_MSG="(i) *This should now be available for testing.*
+
+The following code commits have been made to address this issue:
+
+$COMMITS
+
+$NOTES
+"
+		git checkout $BRANCH_NAME
+		git rebase $TARGET_MERGE_BRANCH
+		git checkout $TARGET_MERGE_BRANCH
+		git merge $BRANCH_NAME
+
+		printf "\nUpdating JIRA..."
+
+		$JIRA_CMD --action progressIssue --issue $BRANCH_NAME --step "Promote"
+		$JIRA_CMD --action addComment --issue $BRANCH_NAME --comment "$COMMIT_MSG"
+
+		echo "Done!"
 	;;
 
 	*) echo "$USAGE" ;;

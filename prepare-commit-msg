@@ -20,6 +20,7 @@ function prepend () {
 	local MSG=$1
 	# Give up if we already have a commit message (like when rebasing)
 	awk 'NR==1 && /^$/ { exit 0 }; {exit 1} ' < $COMMIT_FILE || return 0
+
 	echo -e $MSG | sed -i '' -e "1s/^/\
 # [jira]/" -e 'r /dev/stdin' -e '2s/^/# \
 /' $COMMIT_FILE
@@ -29,8 +30,8 @@ function prepend_ok () {
 	local MSG=$1
 	# Give up if we already have a commit message (like when rebasing)
 	awk 'NR==1 && /^$/ { exit 0 }; {exit 1} ' < $COMMIT_FILE || return 0
-	echo $MSG | sed -i '' -e 'r /dev/stdin'  -e '1d' -e '2s/^/\
-/' $COMMIT_FILE
+
+	echo -e $MSG | sed -i '' -e 'r /dev/stdin' -e '1d' -e '2s/^//' $COMMIT_FILE
 }
 
 function get_cached_issue () {
@@ -38,7 +39,7 @@ function get_cached_issue () {
 	test -f $CACHE_FILE || return 0
 	local LINE=`grep ^$ISSUE: $CACHE_FILE`
 	test -n "$LINE" || return 0
-	ISSUE_DESCR=$(echo $LINE | sed -e "s/^$ISSUE: //")
+	ISSUE_SUMMARY=$(echo $LINE | sed -e "s/^$ISSUE: //")
 }
 
 function fail () {
@@ -56,46 +57,38 @@ test -n "$JIRA_SERVER" || fail "Missing git config variable jira.server (set it 
 test -n "$JIRA_CLI" || fail "Missing git config variable jira.cli (set it with 'git config jira.cli ...')"
 test -n "$JIRA_USER" || fail "Missing git config variable jira.user (set it with 'git config jira.user ...')"
 test -n "$JIRA_PASSWORD" || fail "Missing git config variable jira.password (set it with 'git config jira.password ...')"
-test -n "$JIRA_COMMIT_TEMPLATE" || JIRA_COMMIT_TEMPLATE="[%i]: %t"
+test -n "$JIRA_COMMIT_TEMPLATE" || JIRA_COMMIT_TEMPLATE="[%i] Remove leading hash and provide description"
 
 
 BRANCH_NAME=`git symbolic-ref HEAD | sed -e 's/refs\/heads\///'`
 
-if test -z "$BRANCH_NAME"
-then
+if [ -z "$BRANCH_NAME" ]; then
 	prepend "# Not committing from a branch"
 	exit 0
 fi
 
 # is the branch a JIRA key?
-if [[ ! ( $BRANCH_NAME =~ ^[A-Z]+-[0-9]+$ ) ]]
-then
+if [[ ! ( $BRANCH_NAME =~ ^[A-Z]+-[0-9]+$ ) ]]; then
 	prepend "# Branch does not appear to be a JIRA issue"
 	exit 0
 fi
 
 get_cached_issue $BRANCH_NAME
 
-if test -z "$ISSUE_DESCR"
-then
+if [ -z "$ISSUE_SUMMARY" ]; then
 	echo "Querying JIRA, this might take a while..."
-	ISSUE_DESCR=`$JIRA_CMD --action getFieldValue --issue $BRANCH_NAME --field Summary | sed -e '1d'`
+	ISSUE_SUMMARY=`$JIRA_CMD --action getFieldValue --issue $BRANCH_NAME --field Summary | sed -e '1d'`
 	SHOULD_CACHE=1
 fi
 
-if test -z "$ISSUE_DESCR"
-then
+if [ -z "$ISSUE_SUMMARY" ]; then
 	prepend "# Branch appears to be a JIRA issue but we were unable to get its description"
 	exit 0
 fi
 
-if test "$SHOULD_CACHE" = "1"
-then
-	echo "$BRANCH_NAME: $ISSUE_DESCR" >> $CACHE_FILE
-
+if [ "$SHOULD_CACHE" = "1" ]; then
+	echo "$BRANCH_NAME: $ISSUE_SUMMARY" >> $CACHE_FILE
 fi
 
-prepend "# [$BRANCH_NAME]: $ISSUE_DESCR\n# View issue at $JIRA_SERVER/browse/$BRANCH_NAME"
-
-MSG=`echo $JIRA_COMMIT_TEMPLATE | awk -v i="$BRANCH_NAME" -v t="$ISSUE_DESCR" '{sub(/%i/,i); sub(/%t/,t); print}'`
-prepend_ok "#$MSG"
+TEMPLATE=$(echo "$JIRA_COMMIT_TEMPLATE" | awk -v i="$BRANCH_NAME" -v t="$ISSUE_SUMMARY" '{sub(/%i/,i); sub(/%t/,t); print}')
+prepend_ok "#$TEMPLATE\n#\n# This branch is associated with the following JIRA issue:\n#\t[$BRANCH_NAME] $ISSUE_SUMMARY\n# View this issue at $JIRA_SERVER/browse/$BRANCH_NAME\n#"
