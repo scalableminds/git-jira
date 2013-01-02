@@ -203,7 +203,17 @@ while [ -z "$JIRA_CLI" -o \
 				"$ans2" == "Y" ]; then
 				LINK="https://bobswift.atlassian.net/wiki/download/attachments/16285777/jira-cli-3.1.0-distribution.zip?api=v2"
 
-				# TODO: Add ability to automatically download a working CLI from Atlassian
+				# Add ability to automatically download a working CLI from Atlassian
+				echo "Downloading JIRA CLI from Atlassian..."
+				JIRA_CLI_DOWNLOAD="/tmp/jira-cli.zip"
+				curl --progress-bar -o "$JIRA_CLI_DOWNLOAD" "$LINK"
+
+				printf "Installing to $HOME/bin ..."
+				mkdir -p "$HOME/bin"
+				unzip "$JIRA_CLI_DOWNLOAD" "$HOME/bin" >/dev/null
+				ln -s "$HOME/bin/jira-cli-3.1.0" "$HOME/bin/jira-cli"
+
+				printf "done!\n"
 			fi
 		fi
 
