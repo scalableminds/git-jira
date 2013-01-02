@@ -43,28 +43,15 @@ Additionally, the extension will install a custom `prepare-commit-msg` hook in y
 
 ### Options
 
-JIRA CLI JAR location
-: Specify the location to your JIRA CLI JAR script. This is, of course, necessary for interfacing with JIRA.
-
-JIRA installation URL
-: Specify the full URL to your JIRA installation.
-
-JIRA username
-: Specify your username for accessing JIRA. *Note that this must be an "OnDemand" username, not one authenticated via a third-party service like Google.*
-
-JIRA password
-: Specify your JIRA password.
-
-JIRA issue prefix
-: Specify the issue prefix for the repository in which you are working. This allows you to omit the prefix when issuing commands, e.g. `git jira start 71` instead of `git jira start ABC-71`.
-
-Repository URL
-: Specify the URL prefix to use for reference individual commits. The hash of individual commits will be appended to this URL and linked in the JIRA issue when promoting the issue.
-:For example, on Beanstalk, this might be of the form `https://company.beanstalkapp.com/repository-a/changesets/`.
-:On GitHub this might look like `https://github.com/user/repository-a/commit/`.
-
-Target merge branch
-: Specify the branch you'd like to merge your issue branches back into when you promote a ticket. This is typically `master` unless you do the majority of your development on a separate development branch.
+- JIRA CLI JAR location: Specify the location to your JIRA CLI JAR script. This is, of course, necessary for interfacing with JIRA.
+- JIRA installation URL: Specify the full URL to your JIRA installation.
+- JIRA username: Specify your username for accessing JIRA. *Note that this must be an "OnDemand" username, not one authenticated via a third-party service like Google.*
+- JIRA password: Specify your JIRA password.
+- JIRA issue prefix: Specify the issue prefix for the repository in which you are working. This allows you to omit the prefix when issuing commands, e.g. `git jira start 71` instead of `git jira start ABC-71`.
+- Repository URL: Specify the URL prefix to use for reference individual commits. The hash of individual commits will be appended to this URL and linked in the JIRA issue when promoting the issue.
+    - For example, on Beanstalk, this might be of the form `https://company.beanstalkapp.com/repository-a/changesets/`.
+    - On GitHub this might look like `https://github.com/user/repository-a/commit/`.
+- Target merge branch: Specify the branch you'd like to merge your issue branches back into when you promote a ticket. This is typically `master` unless you do the majority of your development on a separate development branch.
 
 ## Usage
 
