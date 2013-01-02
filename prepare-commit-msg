@@ -9,6 +9,7 @@ CACHE_FILE=$GIT_DIR/jira.cache
 JIRA_SERVER=$(git config jira.server || true)
 JIRA_USER=$(git config jira.user || true)
 JIRA_PASSWORD=$(git config jira.password || true)
+JIRA_PREFIX=$(git config jira.prefix || true)
 
 JIRA_COMMIT_TEMPLATE=$(git config jira.commit.template || true)
 
@@ -57,10 +58,10 @@ test -n "$JIRA_SERVER" || fail "Missing git config variable jira.server (set it 
 test -n "$JIRA_CLI" || fail "Missing git config variable jira.cli (set it with 'git config jira.cli ...')"
 test -n "$JIRA_USER" || fail "Missing git config variable jira.user (set it with 'git config jira.user ...')"
 test -n "$JIRA_PASSWORD" || fail "Missing git config variable jira.password (set it with 'git config jira.password ...')"
-test -n "$JIRA_COMMIT_TEMPLATE" || JIRA_COMMIT_TEMPLATE="[%i] Remove leading hash and provide description"
+test -n "$JIRA_PREFIX" || fail "Missing git config variable jira.prefix (set it with 'git config jira.prefix ...')"
+test -n "$JIRA_COMMIT_TEMPLATE" || JIRA_COMMIT_TEMPLATE="%i - Remove leading hash and provide description"
 
-
-BRANCH_NAME=`git symbolic-ref HEAD | sed -e 's/refs\/heads\///'`
+BRANCH_NAME=$(git symbolic-ref HEAD | sed -e 's/refs\/heads\///')
 
 if [ -z "$BRANCH_NAME" ]; then
 	prepend "# Not committing from a branch"
