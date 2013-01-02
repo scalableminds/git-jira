@@ -156,7 +156,7 @@ GIT_KEY_JIRA_USER="jira.user"
 GIT_KEY_JIRA_PASSWORD="jira.password"
 GIT_KEY_JIRA_PREFIX="jira.prefix"
 GIT_KEY_TARGET_MERGE_BRANCH="jira.targetmergebranch"
-GIT_KEY_BEANSTALK_REPOSITORY="jira.beanstalkrepository"
+GIT_KEY_REPOSITORY="jira.repository"
 
 # JIRA credentials
 JIRA_SERVER=$(git config $GIT_KEY_JIRA_SERVER || true)
@@ -170,19 +170,19 @@ CACHE_FILE=$GIT_DIR/jira.cache
 GIT_USER=$(git config user.name || echo $USER)
 TARGET_MERGE_BRANCH=$(git config $GIT_KEY_TARGET_MERGE_BRANCH || true)
 
-BEANSTALK_REPOSITORY=$(git config $GIT_KEY_BEANSTALK_REPOSITORY || true)
+REPOSITORY=$(git config $GIT_KEY_REPOSITORY || true)
 
 while [ -z "$JIRA_CLI" -o \
 	-z "$JIRA_SERVER" -o \
 	-z "$JIRA_USER" -o \
 	-z "$JIRA_PASSWORD" -o \
 	-z "$JIRA_PREFIX" -o \
-	-z "$BEANSTALK_REPOSITORY" -o \
+	-z "$REPOSITORY" -o \
 	-z "$TARGET_MERGE_BRANCH" ]; do
 
 	printf "We need to set some configuration values in order to correctly\n"
-	printf "interface with JIRA. Entered values will be stored in your\n"
-	printf "$HOME/.gitconfig file.\n"
+	printf "interface with JIRA. Entered values will be stored in the\n"
+	printf ".git/config file of this repository.\n"
 
 	if [ -z "$JIRA_CLI" ]; then
 		printf "\nThe JIRA CLI JAR file should be installed somewhere in your home\n"
@@ -275,15 +275,17 @@ while [ -z "$JIRA_CLI" -o \
 		git config $GIT_KEY_JIRA_PREFIX $JIRA_PREFIX
 	fi
 
-	if [ -z "$BEANSTALK_REPOSITORY" ]; then
-		printf "\nPlease specify the name of your Beanstalk repository that houses\n"
-		printf "the codebase for the associated JIRA project and issues.\n"
-		printf "Do not enter the full URL.\n\n"
+	if [ -z "$REPOSITORY" ]; then
+		printf "\nPlease specify the URL of the repository that houses the codebase\n"
+		printf "for the associated JIRA project and issues, specifically for\n"
+		printf "referencing individual commits or changesets. Individual commit hashes\n"
+		printf "will be appended to this URL when listing commits during issue promotion.\n"
+		printf "Please include a trailing slash.\n\n"
 
-		read -e -p "Beanstalk repository key: " ans
+		read -e -p "Repository URL (with trailing slash): " ans
 
-		BEANSTALK_REPOSITORY=$ans
-		git config $GIT_KEY_BEANSTALK_REPOSITORY $BEANSTALK_REPOSITORY
+		REPOSITORY="$ans"
+		git config $GIT_KEY_REPOSITORY "$REPOSITORY"
 	fi
 
 	if [ -z "$TARGET_MERGE_BRANCH" ]; then
@@ -393,7 +395,7 @@ case "$ACTION" in
 			# The following reduces git log messages down to oneline--multiline
 			# commits are not an issue
 			COMMITS=$(git log $TARGET_MERGE_BRANCH.. --oneline --no-abbrev-commit | sed \
-				-e "s/\([0-9a-f]*\) \(.*\)/* \[\2|http:\/\/hidef.beanstalkapp.com\/$BEANSTALK_REPOSITORY\/changesets\/\1\]/" \
+				-e "s|\([0-9a-f]*\) \(.*\)|* \[\2\|$REPOSITORY\1\]|" \
 				-e "s/$BRANCH_NAME - //")
 			COMMIT_MSG="(i) *This should now be available for testing.*
 
@@ -403,6 +405,7 @@ $COMMITS
 
 $NOTES
 "
+
 			git checkout $BRANCH_NAME
 			git rebase $TARGET_MERGE_BRANCH
 			git checkout $TARGET_MERGE_BRANCH
