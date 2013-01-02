@@ -192,28 +192,39 @@ while [ -z "$JIRA_CLI" -o \
 		read -e -p "JIRA CLI script path: " ans
 
 		if [ -z $ans ]; then
-			printf "You did not specify a path. Would you like to download and install\n"
-			printf "a working configuration into $HOME/bin?\n\n"
+			# Check it see if a previous JIRA CLI exists in the user's ~/bin
+			if [ -d "$HOME/bin/jira-cli" -a -e "$HOME/bin/jira-cli/jira.sh" ]; then
+				echo "JIRA CLI found at $HOME/bin/jira-cli/jira.sh."
+				ans="$HOME/bin/jira-cli/jira.sh"
+			else
+				printf "You did not specify a path. Would you like to download and install\n"
+				printf "a working configuration into $HOME/bin?\n\n"
 
-			read -e -p "Install working configuration [yes]: " ans2
-			ans2=$(echo $ans2 | tr [a-z] [A-Z])
+				read -e -p "Install working configuration [yes]: " ans2
+				ans2=$(echo $ans2 | tr [a-z] [A-Z])
 
-			if [ -z "$ans2" -o \
-				"$ans2" == "YES" -o \
-				"$ans2" == "Y" ]; then
-				LINK="https://bobswift.atlassian.net/wiki/download/attachments/16285777/jira-cli-3.1.0-distribution.zip?api=v2"
+				if [ -z "$ans2" -o \
+					"$ans2" == "YES" -o \
+					"$ans2" == "Y" ]; then
+					LINK="https://bobswift.atlassian.net/wiki/download/attachments/16285777/jira-cli-3.1.0-distribution.zip?api=v2"
 
-				# Add ability to automatically download a working CLI from Atlassian
-				echo "Downloading JIRA CLI from Atlassian..."
-				JIRA_CLI_DOWNLOAD="/tmp/jira-cli.zip"
-				curl --progress-bar -o "$JIRA_CLI_DOWNLOAD" "$LINK"
+					# Add ability to automatically download a working CLI from Atlassian
+					echo "Downloading JIRA CLI from Atlassian..."
+					JIRA_CLI_DOWNLOAD="/tmp/jira-cli.zip"
+					curl --progress-bar -o "$JIRA_CLI_DOWNLOAD" "$LINK"
 
-				printf "Installing to $HOME/bin ..."
-				mkdir -p "$HOME/bin"
-				unzip "$JIRA_CLI_DOWNLOAD" "$HOME/bin" >/dev/null
-				ln -s "$HOME/bin/jira-cli-3.1.0" "$HOME/bin/jira-cli"
+					printf "Installing to $HOME/bin ..."
+					mkdir -p "$HOME/bin"
+					unzip "$JIRA_CLI_DOWNLOAD" "$HOME/bin" >/dev/null
+					ln -s "$HOME/bin/jira-cli-3.1.0" "$HOME/bin/jira-cli"
 
-				printf "done!\n"
+					ans="$HOME/bin/jira-cli/jira.sh"
+
+					printf "done!\n"
+				else
+					echo "No JIRA CLI path provided. Exiting script."
+					exit 1
+				fi
 			fi
 		fi
 
