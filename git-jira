@@ -413,8 +413,8 @@ $NOTES
 
 			printf "\nUpdating JIRA...\n"
 
-			$JIRA_CMD --action progressIssue --issue $BRANCH_NAME --step "Promote"
 			$JIRA_CMD --action addComment --issue $BRANCH_NAME --comment "$COMMIT_MSG"
+			$JIRA_CMD --action progressIssue --issue $BRANCH_NAME --step "Promote"
 
 			read -e -p "Delete local issue branch $BRANCH_NAME [y]: " ans
 			ans=$(echo $ans | tr [a-z] [A-Z])
