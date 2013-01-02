@@ -416,9 +416,9 @@ $NOTES
 			read -e -p "Delete local issue branch $BRANCH_NAME [y]: " ans
 			ans=$(echo $ans | tr [a-z] [A-Z])
 
-			if [ -z $ans -o \
-				$ans == "Y" -o \
-				$ans == "YES" ]; then
+			if [ -z "$ans" -o
+				"$ans" == "YES" -o \
+				"$ans" == "Y" ]; then
 				git branch -d $BRANCH_NAME
 			fi
 
