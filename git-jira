@@ -395,7 +395,7 @@ case "$ACTION" in
 			# The following reduces git log messages down to oneline--multiline
 			# commits are not an issue
 			COMMITS=$(git log $TARGET_MERGE_BRANCH.. --oneline --no-abbrev-commit | sed \
-				-e "s|\([0-9a-f]*\) \(.*\)|* \[\2\|$REPOSITORY\1\]|" \
+				-e "s|\([0-9a-f]*\) \(.*\)|- \[\2\|$REPOSITORY\1\]|" \
 				-e "s/$BRANCH_NAME - //")
 			COMMIT_MSG="(i) *This should now be available for testing.*
 
