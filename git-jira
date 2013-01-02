@@ -2,6 +2,8 @@
 
 function _write_precommit_script () {
 	local SCRIPT_NAME=/tmp/prepare-commit-msg-$RANDOM
+
+### STARTHEREDOC #############################################################
 	cat << 'EOF' > $SCRIPT_NAME
 #!/bin/bash -e
 
@@ -64,7 +66,7 @@ test -n "$JIRA_CLI" || fail "Missing git config variable jira.cli (set it with '
 test -n "$JIRA_USER" || fail "Missing git config variable jira.user (set it with 'git config jira.user ...')"
 test -n "$JIRA_PASSWORD" || fail "Missing git config variable jira.password (set it with 'git config jira.password ...')"
 test -n "$JIRA_PREFIX" || fail "Missing git config variable jira.prefix (set it with 'git config jira.prefix ...')"
-test -n "$JIRA_COMMIT_TEMPLATE" || JIRA_COMMIT_TEMPLATE="%i - Remove leading hash and provide description"
+test -n "$JIRA_COMMIT_TEMPLATE" || JIRA_COMMIT_TEMPLATE="%i - "
 
 BRANCH_NAME=$(git symbolic-ref HEAD | sed -e 's/refs\/heads\///')
 
@@ -99,6 +101,7 @@ fi
 TEMPLATE=$(echo "$JIRA_COMMIT_TEMPLATE" | awk -v i="$BRANCH_NAME" -v t="$ISSUE_SUMMARY" '{sub(/%i/,i); sub(/%t/,t); print}')
 prepend_ok "#$TEMPLATE\n#\n# This branch is associated with the following JIRA issue:\n#\t[$BRANCH_NAME] $ISSUE_SUMMARY\n# View this issue at $JIRA_SERVER/browse/$BRANCH_NAME\n#"
 EOF
+### END HEREDOC ##############################################################
 
 	if $(diff "$GIT_DIR/hooks/prepare-commit-msg" "$SCRIPT_NAME" >/dev/null 2>/dev/null); then
 		: # do nothing
@@ -107,12 +110,12 @@ EOF
 		printf "It appears that it has not yet been installed or is out of date with the\n"
 		printf "needed version. We can update it for you automatically.\n\n"
 
-		read -e -p "Install updated hook [yes]: " ans2
-		ans2=$(echo $ans2 | tr [a-z] [A-Z])
+		read -e -p "Install updated hook [yes]: " ans
+		ans=$(echo $ans | tr [a-z] [A-Z])
 
-		if [ $ans2 == "YES" -o \
-			$ans2 == "Y" -o \
-			-z $ans2 ]; then
+		if [ -z "$ans" -o \
+			"$ans" == "YES" -o \
+			"$ans" == "Y" ]; then
 			cp "$SCRIPT_NAME" "$GIT_DIR/hooks/prepare-commit-msg"
 
 			echo "Hook updated."
@@ -195,9 +198,9 @@ while [ -z "$JIRA_CLI" -o \
 			read -e -p "Install working configuration [yes]: " ans2
 			ans2=$(echo $ans2 | tr [a-z] [A-Z])
 
-			if [ $ans2 == "YES" -o \
-				$ans2 == "Y" -o \
-				-z $ans2 ]; then
+			if [ -z "$ans2" -o \
+				"$ans2" == "YES" -o \
+				"$ans2" == "Y" ]; then
 				LINK="https://bobswift.atlassian.net/wiki/download/attachments/16285777/jira-cli-3.1.0-distribution.zip?api=v2"
 
 				# TODO: Add ability to automatically download a working CLI from Atlassian
