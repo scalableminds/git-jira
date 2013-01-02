@@ -387,7 +387,7 @@ case "$ACTION" in
 
 		rm "$NOTES_FILE"
 
-		if [ ! -z $NOTES_TRIMMED ]; then
+		if [ ! -z "$NOTES_TRIMMED" ]; then
 			printf "\n\nMerging branch $BRANCH_NAME into $TARGET_MERGE_BRANCH..."
 
 			# The following reduces git log messages down to oneline--multiline
