@@ -384,7 +384,7 @@ case "$ACTION" in
 		printf "; for you. An empty message aborts the promote.\n" >> $NOTES_FILE
 
 		${EDITOR:-vi} "$NOTES_FILE"
-		NOTES=$(cat "$NOTES_FILE" | sed -e '/;.*/d') # Remove comments
+		NOTES=$(cat "$NOTES_FILE" | sed -e '/^;.*/d') # Remove comments
 		NOTES_TRIMMED=$(echo "$NOTES" | sed -e '/^$/d') # Remove newlines, just to see if there's anything there
 
 		rm "$NOTES_FILE"
